@@ -1,0 +1,152 @@
+import os
+import asyncio
+import httpx
+from decimal import Decimal, ROUND_DOWN
+from telegram.ext import Application, ContextTypes
+
+BASE58_ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
+
+def base58_to_hex(addr: str) -> str:
+    n = 0
+    for c in addr:
+        n = n * 58 + BASE58_ALPHABET.index(c)
+    return n.to_bytes(25, 'big')[:21].hex()
+
+# ================= 配置区 =================
+TG_BOT_TOKEN = os.environ["TG_BOT_TOKEN"]
+MONITORED_ADDRESS = os.environ["MONITORED_ADDRESS"]
+
+GROUP_A_ID = int(os.environ["GROUP_A_ID"])
+GROUP_B_ID = int(os.environ["GROUP_B_ID"])
+GROUP_C_ID = int(os.environ["GROUP_C_ID"])
+
+GROUP_A_SENDERS = os.environ["GROUP_A_SENDERS"].split(",")
+GROUP_B_SENDERS = os.environ["GROUP_B_SENDERS"].split(",")
+GROUP_C_SENDERS = os.environ["GROUP_C_SENDERS"].split(",")
+
+USDT_CONTRACT = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t"
+CHECK_INTERVAL = int(os.environ.get("CHECK_INTERVAL", "4"))
+# ==========================================
+
+processed_txs = []
+is_first_run = True
+
+USDT_CONTRACT_HEX = base58_to_hex(USDT_CONTRACT)
+
+async def fetch_balances(address: str):
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(f"https://api.trongrid.io/v1/accounts/{address}", timeout=3)
+            if resp.status_code != 200:
+                return 0, 0
+            result = resp.json()
+            account_list = result.get("data", [])
+            if not account_list:
+                return 0, 0
+            account = account_list[0]
+            trx_raw = account.get("balance", 0)
+            trx = Decimal(str(trx_raw)) / Decimal("1000000")
+            trx = float(trx.quantize(Decimal("0.0001"), rounding=ROUND_DOWN))
+            usdt = 0
+            for token in account.get("trc20", []):
+                if USDT_CONTRACT in token:
+                    usdt = Decimal(token[USDT_CONTRACT]) / Decimal("1000000")
+                    usdt = float(usdt.quantize(Decimal("0.0001"), rounding=ROUND_DOWN))
+                    break
+                if USDT_CONTRACT_HEX in token:
+                    usdt = Decimal(token[USDT_CONTRACT_HEX]) / Decimal("1000000")
+                    usdt = float(usdt.quantize(Decimal("0.0001"), rounding=ROUND_DOWN))
+                    break
+            return usdt, trx
+    except Exception:
+        return 0, 0
+
+async def check_usdt_transactions(context: ContextTypes.DEFAULT_TYPE):
+    global is_first_run, processed_txs
+    
+    url = f"https://api.trongrid.io/v1/accounts/{MONITORED_ADDRESS}/transactions/trc20"
+    params = {
+        "contract_address": USDT_CONTRACT,
+        "limit": 10,
+        "only_confirmed": "false"
+    }
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url, params=params, timeout=3)
+            if response.status_code != 200:
+                return
+            
+            res_data = response.json()
+            if not res_data.get("success"):
+                return
+            
+            transactions = res_data.get("data", [])
+            
+            # 首次运行同步历史记录，防启动轰炸
+            if is_first_run:
+                for tx in transactions:
+                    processed_txs.append(tx.get("transaction_id"))
+                is_first_run = False
+                print(f"🎉 监控已启动！当前监听地址：{MONITORED_ADDRESS}")
+                return
+
+            # 从旧到新处理新到账
+            for tx in reversed(transactions):
+                tx_id = tx.get("transaction_id")
+                
+                if tx_id not in processed_txs and tx.get("to") == MONITORED_ADDRESS:
+                    raw_value = int(tx.get("value", 0))
+                    decimals = int(tx.get("token_info", {}).get("decimals", 6))
+                    amount = raw_value / (10 ** decimals)
+                    from_address = tx.get("from")
+                    
+                    # 后台自动精确判定发送到哪个群，但群消息里不再显示多余标签
+                    if from_address in GROUP_A_SENDERS:
+                        target_groups = [GROUP_A_ID]
+                    elif from_address in GROUP_B_SENDERS:
+                        target_groups = [GROUP_B_ID]
+                    elif from_address in GROUP_C_SENDERS:
+                        target_groups = [GROUP_C_ID]
+                    else:
+                        continue
+                    
+                    await asyncio.sleep(3)
+                    usdt_balance, trx_balance = await fetch_balances(from_address)
+
+                    message = (
+                        f"🔔 <b>收到一笔 USDT 到账提醒！呜呼 发财啦🎉🎉🎉</b>\n\n"
+                        f"💰 <b>到账金额:</b> <code>{amount:.4f}</code> USDT\n"
+                        f"👤 <b>付款地址:</b> <code>{from_address}</code>\n"
+                        f"📊 <b>对方USDT余额:</b> <code>{usdt_balance:.4f}</code>\n"
+                        f"📊 <b>对方TRX余额:</b> <code>{trx_balance:.4f}</code>\n"
+                        f"🔗 <b>区块哈希:</b> <code>{tx_id}</code>"
+                    )
+                    
+                    # 精准投递到对应的群
+                    for chat_id in target_groups:
+                        try:
+                            await context.bot.send_message(
+                                chat_id=chat_id,
+                                text=message,
+                                parse_mode="HTML",
+                                disable_web_page_preview=True
+                            )
+                        except Exception as send_err:
+                            print(f"群组 {chat_id} 发送失败: {send_err}")
+                    
+                    processed_txs.append(tx_id)
+            
+            if len(processed_txs) > 200:
+                processed_txs = processed_txs[-200:]
+                
+    except Exception as e:
+        print(f"网络轮询异常: {e}")
+
+def main():
+    application = Application.builder().token(TG_BOT_TOKEN).build()
+    application.job_queue.run_repeating(check_usdt_transactions, interval=CHECK_INTERVAL, first=1)
+    application.run_polling()
+
+if __name__ == "__main__":
+    main()
