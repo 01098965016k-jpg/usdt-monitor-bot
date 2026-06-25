@@ -1,6 +1,7 @@
 import os
 import time
 import asyncio
+from datetime import datetime
 import httpx
 from decimal import Decimal, ROUND_DOWN
 from telegram import Update
@@ -193,19 +194,16 @@ async def cx_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await msg.edit_text("❌ 暂无商家报价")
             return
 
-        best_sell = sell_list[0]
-        best_buy = buy_list[0]
-
-        lines = ["📈 <b>OKX C2C USDT/CNY 实时汇率</b>\n"]
-        lines.append(f"🟢 <b>卖USDT(买币):</b> <code>{best_sell['price']}</code>")
-        lines.append(f"🔴 <b>买USDT(卖币):</b> <code>{best_buy['price']}</code>")
-        lines.append("")
-
-        lines.append("━━━ 商家卖USDT Top 10 ━━━")
+        lines = ["━━━ 商家卖USDT Top 10 ━━━"]
         for i, ad in enumerate(sell_list[:10], 1):
             pm = ad.get("paymentMethod", "")
             fname = ad.get("nickName", ad.get("userName", "未知"))
             lines.append(f"{i}. <b>{ad['price']}</b> {fname} | {pm}")
+
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        lines.append("")
+        lines.append(f"⏰ {now}")
+        lines.append("💬 使用十七机器人，你会成为人上人")
 
         await msg.edit_text("\n".join(lines), parse_mode="HTML")
 
