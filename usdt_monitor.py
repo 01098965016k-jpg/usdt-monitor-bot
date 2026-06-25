@@ -193,7 +193,7 @@ async def cx_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("❌ 暂无商家报价")
             return
 
-        lines = ["<b>💱 Okex 商家 C2C实时交易汇率</b>\n"]
+        lines = ["<b>💱 OKX 商家 C2C实时交易汇率</b>\n"]
         lines.append("━━━ 商家卖USDT Top 10 ━━━")
         for i, ad in enumerate(sell_list[:10], 1):
             fname = ad.get("nickName", ad.get("userName", "未知"))
