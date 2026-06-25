@@ -1,7 +1,7 @@
 import os
 import time
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 import httpx
 from decimal import Decimal, ROUND_DOWN
 from telegram import Update
@@ -201,7 +201,7 @@ async def cx_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             fname = ad.get("nickName", ad.get("userName", "未知"))
             lines.append(f"{i}. <b>{ad['price']}</b> {fname} | {pm}")
 
-        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        now = datetime.now(timezone(timedelta(hours=8))).strftime("%Y-%m-%d %H:%M:%S")
         lines.append("")
         lines.append(f"⏰ <i>{now}</i>")
         lines.append("")
