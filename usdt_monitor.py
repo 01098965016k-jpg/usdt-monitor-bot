@@ -148,34 +148,41 @@ async def check_usdt_transactions(context: ContextTypes.DEFAULT_TYPE):
 async def cx_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = await update.message.reply_text("⏳ 正在获取 OKX C2C 实时汇率...")
     try:
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0",
+            "Accept": "application/json",
+            "Accept-Language": "zh-CN,zh;q=0.9",
+        }
+
         async with httpx.AsyncClient() as client:
-            async def fetch_side(side):
-                resp = await client.get(
-                    "https://www.okx.com/api/v5/c2c/trading-orders/book",
-                    params={
+            async def fetch_v3(side):
+                resp = await client.post(
+                    "https://www.okx.com/v3/c2c/tradingOrders/books",
+                    json={
+                        "baseCurrency": "USDT",
+                        "quoteCurrency": "CNY",
                         "side": side,
-                        "baseCcy": "USDT",
-                        "quoteCcy": "CNY",
-                        "sortBy": "price",
-                        "sortDirection": "asc" if side == "sell" else "desc",
-                        "t": int(time.time() * 1000)
+                        "paymentMethod": "all",
+                        "userType": "all",
                     },
-                    headers={"User-Agent": "Mozilla/5.0"},
+                    headers=headers,
                     timeout=5
                 )
                 return resp.json()
 
             sell_resp, buy_resp = await asyncio.gather(
-                fetch_side("sell"),
-                fetch_side("buy")
+                fetch_v3("sell"),
+                fetch_v3("buy")
             )
 
         if sell_resp.get("code") != "0" or buy_resp.get("code") != "0":
             await msg.edit_text("❌ OKX API 请求失败")
             return
 
-        sell_list = sell_resp.get("data", [])
-        buy_list = buy_resp.get("data", [])
+        sell_data = sell_resp.get("data", {})
+        buy_data = buy_resp.get("data", {})
+        sell_list = sell_data.get("sell", []) if isinstance(sell_data, dict) else sell_data
+        buy_list = buy_data.get("buy", []) if isinstance(buy_data, dict) else buy_data
 
         if not sell_list or not buy_list:
             await msg.edit_text("❌ 暂无商家报价")
@@ -192,13 +199,13 @@ async def cx_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         lines.append("━━━ 商家卖USDT Top 5 ━━━")
         for i, ad in enumerate(sell_list[:5], 1):
             pm = ad.get("paymentMethod", "")
-            lines.append(f"{i}. <b>{ad['price']}</b> | {ad.get('surplusAmt', '0')} USDT | {pm}")
+            lines.append(f"{i}. <b>{ad['price']}</b> | {ad.get('surplusAmount', '0')} USDT | {pm}")
 
         lines.append("")
         lines.append("━━━ 商家买USDT Top 5 ━━━")
         for i, ad in enumerate(buy_list[:5], 1):
             pm = ad.get("paymentMethod", "")
-            lines.append(f"{i}. <b>{ad['price']}</b> | {ad.get('surplusAmt', '0')} USDT | {pm}")
+            lines.append(f"{i}. <b>{ad['price']}</b> | {ad.get('surplusAmount', '0')} USDT | {pm}")
 
         await msg.edit_text("\n".join(lines), parse_mode="HTML")
 
