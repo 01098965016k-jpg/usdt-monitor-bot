@@ -195,15 +195,17 @@ async def cx_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         lines.append("━━━ 商家卖USDT Top 5 ━━━")
         for i, ad in enumerate(sell_list[:5], 1):
             adv = ad["adv"]
+            nick = ad.get("advertiser", {}).get("nickName", "未知")
             pm = ", ".join(a["identifier"] for a in ad.get("advDetail", {}).get("tradeMethods", []))
-            lines.append(f"{i}. <b>{adv['price']}</b> | {adv['surplusAmount']} USDT | {pm}")
+            lines.append(f"{i}. <b>{adv['price']}</b> {nick} | {adv['surplusAmount']} USDT | {pm}")
 
         lines.append("")
         lines.append("━━━ 商家买USDT Top 5 ━━━")
         for i, ad in enumerate(buy_list[:5], 1):
             adv = ad["adv"]
+            nick = ad.get("advertiser", {}).get("nickName", "未知")
             pm = ", ".join(a["identifier"] for a in ad.get("advDetail", {}).get("tradeMethods", []))
-            lines.append(f"{i}. <b>{adv['price']}</b> | {adv['surplusAmount']} USDT | {pm}")
+            lines.append(f"{i}. <b>{adv['price']}</b> {nick} | {adv['surplusAmount']} USDT | {pm}")
 
         await msg.edit_text("\n".join(lines), parse_mode="HTML")
 
