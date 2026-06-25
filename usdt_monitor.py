@@ -197,9 +197,8 @@ async def cx_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         lines = ["<b>💱 Okex 商家 C2C实时交易汇率</b>\n"]
         lines.append("━━━ 商家卖USDT Top 10 ━━━")
         for i, ad in enumerate(sell_list[:10], 1):
-            pm = ad.get("paymentMethod", "")
             fname = ad.get("nickName", ad.get("userName", "未知"))
-            lines.append(f"{i}. <b>{ad['price']}</b> {fname} | {pm}")
+            lines.append(f"{i}. <b>{ad['price']}</b> {fname}")
 
         now = datetime.now(timezone(timedelta(hours=8))).strftime("%Y-%m-%d %H:%M:%S")
         lines.append("")
