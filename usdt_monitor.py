@@ -149,15 +149,16 @@ async def cx_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = await update.message.reply_text("⏳ 正在获取 OKX C2C 实时汇率...")
     try:
         headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0",
-            "Accept": "*/*",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "application/json, text/plain, */*",
             "Accept-Language": "zh-CN,zh;q=0.9",
+            "Accept-Encoding": "gzip, deflate, br",
             "Origin": "https://www.okx.com",
             "Referer": "https://www.okx.com/c2c/trading",
         }
 
-        async with httpx.AsyncClient(follow_redirects=True) as client:
-            async def fetch_v5(side, direction):
+        async with httpx.AsyncClient(http2=True, follow_redirects=True) as client:
+            async def fetch_side(side, direction):
                 resp = await client.get(
                     "https://www.okx.com/api/v5/c2c/trading-orders/book",
                     params={
@@ -172,17 +173,23 @@ async def cx_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     timeout=5
                 )
                 text = resp.text
-                if not text:
+                if not text.strip():
                     raise Exception("empty response")
                 data = resp.json()
                 if data.get("code") != "0":
-                    raise Exception(f"OKX v5 error: code={data.get('code')}, msg={data.get('msg')}")
+                    raise Exception(f"OKX error: code={data.get('code')}, msg={data.get('msg')}")
                 return data
 
-            sell_resp, buy_resp = await asyncio.gather(
-                fetch_v5("sell", "asc"),
-                fetch_v5("buy", "desc")
-            )
+            try:
+                sell_resp, buy_resp = await asyncio.gather(
+                    fetch_side("sell", "asc"),
+                    fetch_side("buy", "desc")
+                )
+            except Exception:
+                sell_resp, buy_resp = await asyncio.gather(
+                    fetch_side("SELL", "asc"),
+                    fetch_side("BUY", "desc")
+                )
 
         sell_list = sell_resp.get("data", [])
         buy_list = buy_resp.get("data", [])
