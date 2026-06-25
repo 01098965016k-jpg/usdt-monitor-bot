@@ -175,7 +175,7 @@ async def cx_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if not text.strip():
                     raise Exception("empty response")
                 data = resp.json()
-                if data.get("code") != "0":
+                if str(data.get("code")) != "0":
                     raise Exception(f"OKX error: code={data.get('code')}, msg={data.get('msg')}")
                 return data
 
