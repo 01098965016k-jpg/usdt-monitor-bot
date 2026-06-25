@@ -146,39 +146,44 @@ async def check_usdt_transactions(context: ContextTypes.DEFAULT_TYPE):
         print(f"网络轮询异常: {e}")
 
 async def cx_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = await update.message.reply_text("⏳ 正在获取 C2C 实时汇率...")
+    msg = await update.message.reply_text("⏳ 正在获取 OKX C2C 实时汇率...")
     try:
         headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0",
             "Accept": "application/json",
             "Accept-Language": "zh-CN,zh;q=0.9",
+            "Origin": "https://www.okx.com",
             "Referer": "https://www.okx.com/c2c/trading",
         }
 
         async with httpx.AsyncClient(follow_redirects=True) as client:
-            payload = {
-                "page": 1, "rows": 10,
-                "payTypes": [],
-                "asset": "USDT",
-                "tradeType": "SELL",
-                "fiat": "CNY",
-                "publisherType": None,
-            }
-            sell_resp = await client.post(
-                "https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search",
-                json=payload, headers=headers, timeout=5
-            )
-            payload["tradeType"] = "BUY"
-            buy_resp = await client.post(
-                "https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search",
-                json=payload, headers=headers, timeout=5
+            async def fetch_v3(side):
+                resp = await client.post(
+                    "https://www.okx.com/v3/c2c/tradingOrders/books",
+                    json={
+                        "baseCurrency": "USDT",
+                        "quoteCurrency": "CNY",
+                        "side": side,
+                        "paymentMethod": "all",
+                        "userType": "all",
+                    },
+                    headers=headers,
+                    timeout=5
+                )
+                data = resp.json()
+                if data.get("code") != "0":
+                    raise Exception(f"OKX v3 error: code={data.get('code')}, msg={data.get('msg')}")
+                return data
+
+            sell_resp, buy_resp = await asyncio.gather(
+                fetch_v3("sell"),
+                fetch_v3("buy")
             )
 
-        sell_data = sell_resp.json()
-        buy_data = buy_resp.json()
-
-        sell_list = sell_data.get("data", [])
-        buy_list = buy_data.get("data", [])
+        sell_data = sell_resp.get("data", {})
+        buy_data = buy_resp.get("data", {})
+        sell_list = sell_data.get("sell", []) if isinstance(sell_data, dict) else sell_data
+        buy_list = buy_data.get("buy", []) if isinstance(buy_data, dict) else buy_data
 
         if not sell_list or not buy_list:
             await msg.edit_text("❌ 暂无商家报价")
@@ -187,25 +192,23 @@ async def cx_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         best_sell = sell_list[0]
         best_buy = buy_list[0]
 
-        lines = ["📈 <b>币安 P2P USDT/CNY 实时汇率</b>\n"]
-        lines.append(f"🟢 <b>卖USDT(买币):</b> <code>{best_sell['adv']['price']}</code>")
-        lines.append(f"🔴 <b>买USDT(卖币):</b> <code>{best_buy['adv']['price']}</code>")
+        lines = ["📈 <b>OKX C2C USDT/CNY 实时汇率</b>\n"]
+        lines.append(f"🟢 <b>卖USDT(买币):</b> <code>{best_sell['price']}</code>")
+        lines.append(f"🔴 <b>买USDT(卖币):</b> <code>{best_buy['price']}</code>")
         lines.append("")
 
         lines.append("━━━ 商家卖USDT Top 5 ━━━")
         for i, ad in enumerate(sell_list[:5], 1):
-            adv = ad["adv"]
-            nick = ad.get("advertiser", {}).get("nickName", "未知")
-            pm = ", ".join(a["identifier"] for a in ad.get("advDetail", {}).get("tradeMethods", []))
-            lines.append(f"{i}. <b>{adv['price']}</b> {nick} | {adv['surplusAmount']} USDT | {pm}")
+            pm = ad.get("paymentMethod", "")
+            fname = ad.get("nickName", ad.get("userName", "未知"))
+            lines.append(f"{i}. <b>{ad['price']}</b> {fname} | {ad.get('surplusAmount', '0')} USDT | {pm}")
 
         lines.append("")
         lines.append("━━━ 商家买USDT Top 5 ━━━")
         for i, ad in enumerate(buy_list[:5], 1):
-            adv = ad["adv"]
-            nick = ad.get("advertiser", {}).get("nickName", "未知")
-            pm = ", ".join(a["identifier"] for a in ad.get("advDetail", {}).get("tradeMethods", []))
-            lines.append(f"{i}. <b>{adv['price']}</b> {nick} | {adv['surplusAmount']} USDT | {pm}")
+            pm = ad.get("paymentMethod", "")
+            fname = ad.get("nickName", ad.get("userName", "未知"))
+            lines.append(f"{i}. <b>{ad['price']}</b> {fname} | {ad.get('surplusAmount', '0')} USDT | {pm}")
 
         await msg.edit_text("\n".join(lines), parse_mode="HTML")
 
