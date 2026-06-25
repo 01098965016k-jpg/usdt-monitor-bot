@@ -194,7 +194,8 @@ async def cx_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await msg.edit_text("❌ 暂无商家报价")
             return
 
-        lines = ["━━━ 商家卖USDT Top 10 ━━━"]
+        lines = ["<b>💱 Okex 商家 C2C实时交易汇率</b>\n"]
+        lines.append("━━━ 商家卖USDT Top 10 ━━━")
         for i, ad in enumerate(sell_list[:10], 1):
             pm = ad.get("paymentMethod", "")
             fname = ad.get("nickName", ad.get("userName", "未知"))
@@ -202,8 +203,9 @@ async def cx_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         lines.append("")
-        lines.append(f"⏰ {now}")
-        lines.append("💬 使用十七机器人，你会成为人上人")
+        lines.append(f"⏰ <i>{now}</i>")
+        lines.append("")
+        lines.append("<b>💰 使用十七机器人，你会成为人上人</b>")
 
         await msg.edit_text("\n".join(lines), parse_mode="HTML")
 
