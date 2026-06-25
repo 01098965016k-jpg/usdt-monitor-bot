@@ -147,7 +147,6 @@ async def check_usdt_transactions(context: ContextTypes.DEFAULT_TYPE):
         print(f"网络轮询异常: {e}")
 
 async def cx_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = await update.message.reply_text("⏳ 正在获取 OKX C2C 实时汇率...")
     try:
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -191,7 +190,7 @@ async def cx_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         buy_list = buy_data.get("buy", []) if isinstance(buy_data, dict) else buy_data
 
         if not sell_list or not buy_list:
-            await msg.edit_text("❌ 暂无商家报价")
+            await update.message.reply_text("❌ 暂无商家报价")
             return
 
         lines = ["<b>💱 Okex 商家 C2C实时交易汇率</b>\n"]
@@ -206,10 +205,10 @@ async def cx_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         lines.append("")
         lines.append("<b>💰 使用十七机器人，你会成为人上人</b>")
 
-        await msg.edit_text("\n".join(lines), parse_mode="HTML")
+        await update.message.reply_text("\n".join(lines), parse_mode="HTML")
 
     except Exception as e:
-        await msg.edit_text(f"❌ 获取失败: {e}")
+        await update.message.reply_text(f"❌ 获取失败: {e}")
 
 def main():
     application = Application.builder().token(TG_BOT_TOKEN).build()
