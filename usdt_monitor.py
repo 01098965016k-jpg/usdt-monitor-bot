@@ -201,18 +201,11 @@ async def cx_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         lines.append(f"🔴 <b>买USDT(卖币):</b> <code>{best_buy['price']}</code>")
         lines.append("")
 
-        lines.append("━━━ 商家卖USDT Top 5 ━━━")
-        for i, ad in enumerate(sell_list[:5], 1):
+        lines.append("━━━ 商家卖USDT Top 10 ━━━")
+        for i, ad in enumerate(sell_list[:10], 1):
             pm = ad.get("paymentMethod", "")
             fname = ad.get("nickName", ad.get("userName", "未知"))
-            lines.append(f"{i}. <b>{ad['price']}</b> {fname} | {ad.get('surplusAmount', '0')} USDT | {pm}")
-
-        lines.append("")
-        lines.append("━━━ 商家买USDT Top 5 ━━━")
-        for i, ad in enumerate(buy_list[:5], 1):
-            pm = ad.get("paymentMethod", "")
-            fname = ad.get("nickName", ad.get("userName", "未知"))
-            lines.append(f"{i}. <b>{ad['price']}</b> {fname} | {ad.get('surplusAmount', '0')} USDT | {pm}")
+            lines.append(f"{i}. <b>{ad['price']}</b> {fname} | {pm}")
 
         await msg.edit_text("\n".join(lines), parse_mode="HTML")
 
