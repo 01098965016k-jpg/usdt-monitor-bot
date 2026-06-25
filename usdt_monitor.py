@@ -152,21 +152,20 @@ async def cx_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             "Accept": "application/json, text/plain, */*",
             "Accept-Language": "zh-CN,zh;q=0.9",
-            "Accept-Encoding": "gzip, deflate, br",
             "Origin": "https://www.okx.com",
             "Referer": "https://www.okx.com/c2c/trading",
         }
 
-        async with httpx.AsyncClient(http2=True, follow_redirects=True) as client:
-            async def fetch_side(side, direction):
+        async with httpx.AsyncClient(follow_redirects=True) as client:
+            async def fetch_v3(side):
                 resp = await client.get(
-                    "https://www.okx.com/api/v5/c2c/trading-orders/book",
+                    "https://www.okx.com/v3/c2c/tradingOrders/books",
                     params={
+                        "baseCurrency": "USDT",
+                        "quoteCurrency": "CNY",
                         "side": side,
-                        "baseCcy": "USDT",
-                        "quoteCcy": "CNY",
-                        "sortBy": "price",
-                        "sortDirection": direction,
+                        "paymentMethod": "all",
+                        "userType": "all",
                         "t": int(time.time() * 1000),
                     },
                     headers=headers,
@@ -180,19 +179,15 @@ async def cx_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     raise Exception(f"OKX error: code={data.get('code')}, msg={data.get('msg')}")
                 return data
 
-            try:
-                sell_resp, buy_resp = await asyncio.gather(
-                    fetch_side("sell", "asc"),
-                    fetch_side("buy", "desc")
-                )
-            except Exception:
-                sell_resp, buy_resp = await asyncio.gather(
-                    fetch_side("SELL", "asc"),
-                    fetch_side("BUY", "desc")
-                )
+            sell_resp, buy_resp = await asyncio.gather(
+                fetch_v3("sell"),
+                fetch_v3("buy")
+            )
 
-        sell_list = sell_resp.get("data", [])
-        buy_list = buy_resp.get("data", [])
+        sell_data = sell_resp.get("data", {})
+        buy_data = buy_resp.get("data", {})
+        sell_list = sell_data.get("sell", []) if isinstance(sell_data, dict) else sell_data
+        buy_list = buy_data.get("buy", []) if isinstance(buy_data, dict) else buy_data
 
         if not sell_list or not buy_list:
             await msg.edit_text("❌ 暂无商家报价")
@@ -210,14 +205,14 @@ async def cx_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         for i, ad in enumerate(sell_list[:5], 1):
             pm = ad.get("paymentMethod", "")
             fname = ad.get("nickName", ad.get("userName", "未知"))
-            lines.append(f"{i}. <b>{ad['price']}</b> {fname} | {ad.get('surplusAmt', '0')} USDT | {pm}")
+            lines.append(f"{i}. <b>{ad['price']}</b> {fname} | {ad.get('surplusAmount', '0')} USDT | {pm}")
 
         lines.append("")
         lines.append("━━━ 商家买USDT Top 5 ━━━")
         for i, ad in enumerate(buy_list[:5], 1):
             pm = ad.get("paymentMethod", "")
             fname = ad.get("nickName", ad.get("userName", "未知"))
-            lines.append(f"{i}. <b>{ad['price']}</b> {fname} | {ad.get('surplusAmt', '0')} USDT | {pm}")
+            lines.append(f"{i}. <b>{ad['price']}</b> {fname} | {ad.get('surplusAmount', '0')} USDT | {pm}")
 
         await msg.edit_text("\n".join(lines), parse_mode="HTML")
 
