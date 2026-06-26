@@ -1,5 +1,6 @@
 import os
 import time
+import sqlite3
 import asyncio
 from datetime import datetime, timezone, timedelta
 import httpx
@@ -32,8 +33,24 @@ CHECK_INTERVAL = int(os.environ.get("CHECK_INTERVAL", "4"))
 TRONGRID_API_KEY = "e0513fec-d546-4a16-bd68-9bcdbdc1322d"
 # ==========================================
 
-processed_txs = []
-is_first_run = True
+DB_PATH = "processed_txs.db"
+
+def init_db():
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("CREATE TABLE IF NOT EXISTS processed_txs (tx_id TEXT PRIMARY KEY, created_at TEXT DEFAULT (datetime('now')))")
+    conn.commit()
+    conn.close()
+
+init_db()
+
+processed_tx_set = set()
+try:
+    conn = sqlite3.connect(DB_PATH)
+    for row in conn.execute("SELECT tx_id FROM processed_txs"):
+        processed_tx_set.add(row[0])
+    conn.close()
+except Exception:
+    pass
 
 USDT_CONTRACT_HEX = base58_to_hex(USDT_CONTRACT)
 
@@ -66,7 +83,7 @@ async def fetch_balances(address: str):
         return 0, 0
 
 async def check_usdt_transactions(context: ContextTypes.DEFAULT_TYPE):
-    global is_first_run, processed_txs
+    global processed_tx_set
     
     url = f"https://api.trongrid.io/v1/accounts/{MONITORED_ADDRESS}/transactions/trc20"
     params = {
@@ -86,20 +103,12 @@ async def check_usdt_transactions(context: ContextTypes.DEFAULT_TYPE):
                 return
             
             transactions = res_data.get("data", [])
-            
-            # 首次运行同步历史记录，防启动轰炸
-            if is_first_run:
-                for tx in transactions:
-                    processed_txs.append(tx.get("transaction_id"))
-                is_first_run = False
-                print(f"🎉 监控已启动！当前监听地址：{MONITORED_ADDRESS}")
-                return
 
             # 从旧到新处理新到账
             for tx in reversed(transactions):
                 tx_id = tx.get("transaction_id")
                 
-                if tx_id not in processed_txs and tx.get("to") == MONITORED_ADDRESS:
+                if tx_id not in processed_tx_set and tx.get("to") == MONITORED_ADDRESS:
                     raw_value = int(tx.get("value", 0))
                     decimals = int(tx.get("token_info", {}).get("decimals", 6))
                     amount = raw_value / (10 ** decimals)
@@ -139,10 +148,22 @@ async def check_usdt_transactions(context: ContextTypes.DEFAULT_TYPE):
                         except Exception as send_err:
                             print(f"群组 {chat_id} 发送失败: {send_err}")
                     
-                    processed_txs.append(tx_id)
+                    conn = sqlite3.connect(DB_PATH)
+                    conn.execute("INSERT OR IGNORE INTO processed_txs (tx_id) VALUES (?)", (tx_id,))
+                    conn.commit()
+                    conn.close()
+                    processed_tx_set.add(tx_id)
             
-            if len(processed_txs) > 200:
-                processed_txs = processed_txs[-200:]
+            if len(processed_tx_set) > 200:
+                conn = sqlite3.connect(DB_PATH)
+                conn.execute("DELETE FROM processed_txs WHERE tx_id NOT IN (SELECT tx_id FROM processed_txs ORDER BY created_at DESC LIMIT 200)")
+                conn.commit()
+                conn.close()
+                processed_tx_set.clear()
+                conn = sqlite3.connect(DB_PATH)
+                for row in conn.execute("SELECT tx_id FROM processed_txs"):
+                    processed_tx_set.add(row[0])
+                conn.close()
                 
     except Exception as e:
         print(f"网络轮询异常: {e}")
