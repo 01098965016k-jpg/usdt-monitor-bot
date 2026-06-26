@@ -29,6 +29,7 @@ GROUP_C_SENDERS = os.environ["GROUP_C_SENDERS"].split(",")
 
 USDT_CONTRACT = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t"
 CHECK_INTERVAL = int(os.environ.get("CHECK_INTERVAL", "4"))
+TRONGRID_API_KEY = "e0513fec-d546-4a16-bd68-9bcdbdc1322d"
 # ==========================================
 
 processed_txs = []
@@ -38,7 +39,7 @@ USDT_CONTRACT_HEX = base58_to_hex(USDT_CONTRACT)
 
 async def fetch_balances(address: str):
     try:
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(headers={"TRON-PRO-API-KEY": TRONGRID_API_KEY}) as client:
             resp = await client.get(f"https://api.trongrid.io/v1/accounts/{address}", timeout=3)
             if resp.status_code != 200:
                 return 0, 0
@@ -75,7 +76,7 @@ async def check_usdt_transactions(context: ContextTypes.DEFAULT_TYPE):
     }
     
     try:
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(headers={"TRON-PRO-API-KEY": TRONGRID_API_KEY}) as client:
             response = await client.get(url, params=params, timeout=3)
             if response.status_code != 200:
                 return
