@@ -54,6 +54,10 @@ except Exception:
 
 USDT_CONTRACT_HEX = base58_to_hex(USDT_CONTRACT)
 
+CX_CACHE_SECONDS = 30
+_cx_cache_text = None
+_cx_cache_time = 0.0
+
 async def fetch_balances(address: str):
     try:
         async with httpx.AsyncClient(headers={"TRON-PRO-API-KEY": TRONGRID_API_KEY}) as client:
@@ -169,6 +173,13 @@ async def check_usdt_transactions(context: ContextTypes.DEFAULT_TYPE):
         print(f"网络轮询异常: {e}")
 
 async def cx_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    global _cx_cache_text, _cx_cache_time
+
+    now_ts = time.time()
+    if _cx_cache_text and (now_ts - _cx_cache_time) < CX_CACHE_SECONDS:
+        await update.message.reply_text(_cx_cache_text, parse_mode="HTML")
+        return
+
     try:
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -227,7 +238,10 @@ async def cx_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         lines.append("")
         lines.append("<b>💰 使用十七机器人，你会成为人上人</b>")
 
-        await update.message.reply_text("\n".join(lines), parse_mode="HTML")
+        _cx_cache_text = "\n".join(lines)
+        _cx_cache_time = time.time()
+
+        await update.message.reply_text(_cx_cache_text, parse_mode="HTML")
 
     except Exception as e:
         await update.message.reply_text(f"❌ 获取失败: {e}")
