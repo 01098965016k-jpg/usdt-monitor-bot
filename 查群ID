@@ -1,13 +1,5 @@
 async def groupid_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
-        # 使用 effective_chat 和 effective_message 确保安全性
-        chat = update.effective_chat
-        message = update.effective_message
-        
-        if not chat or not message:
-            return
-async def groupid_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    try:
         message = update.effective_message
         if not message or not message.text:
             return
@@ -39,35 +31,6 @@ def main():
     
     # 【修改这里】拦截所有纯文本消息，交给函数内部去判断是否包含“查群id”
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, groupid_command))
-    
-    application.job_queue.run_repeating(check_usdt_transactions, interval=CHECK_INTERVAL, first=1)
-    application.run_polling()
-        chat_id = chat.id
-        # 获取群名称，如果是私聊则显示为"私聊"
-        chat_title = chat.title if chat.title else "高级私聊"
-        
-        # 优化排版，加入复制快捷键（<code> 标签在 TG 中点击可直接复制）
-        result = (
-            f"🆔 <b>当前群组信息</b>\n\n"
-            f"🏷️ <b>群ID:</b> <code>{chat_id}</code>\n"
-            f"📝 <b>群名称:</b> <code>{chat_title}</code>\n\n"
-            f"✅ 查询成功！"
-        )
-        
-        await message.reply_text(result, parse_mode="HTML")
-    except Exception as e:
-        # 防止极端情况下 reply_text 失败导致无限报错，这里先打印日志
-        print(f"发生错误: {e}")
-
-def main():
-    # 假设你的 TG_BOT_TOKEN 和 check_usdt_transactions 已经在别处定义好
-    application = Application.builder().token(TG_BOT_TOKEN).build()
-    
-    application.add_handler(CommandHandler("cx", cx_command))
-    application.add_handler(MessageHandler(filters.Regex(r'^[cC][xX]$'), cx_command))
-    
-    # 修改后的完美正则：支持 "查群id"、"查群ID"、"cha群id"、"CHAID" 等
-    application.add_handler(MessageHandler(filters.Regex(r'^(查|[cC][hH][aA])群?[iI][dD]$'), groupid_command))
     
     application.job_queue.run_repeating(check_usdt_transactions, interval=CHECK_INTERVAL, first=1)
     application.run_polling()
