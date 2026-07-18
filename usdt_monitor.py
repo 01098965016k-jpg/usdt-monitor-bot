@@ -23,10 +23,12 @@ MONITORED_ADDRESS = os.environ["MONITORED_ADDRESS"]
 GROUP_A_ID = int(os.environ["GROUP_A_ID"])
 GROUP_B_ID = int(os.environ["GROUP_B_ID"])
 GROUP_C_ID = int(os.environ["GROUP_C_ID"])
+GROUP_D_ID = int(os.environ["GROUP_D_ID"]) # 🌟 新增：读取群D的ID
 
 GROUP_A_SENDERS = os.environ["GROUP_A_SENDERS"].split(",")
 GROUP_B_SENDERS = os.environ["GROUP_B_SENDERS"].split(",")
 GROUP_C_SENDERS = os.environ["GROUP_C_SENDERS"].split(",")
+GROUP_D_SENDERS = os.environ["GROUP_D_SENDERS"].split(",") # 🌟 新增：读取群D的付款地址列表
 
 USDT_CONTRACT = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t"
 CHECK_INTERVAL = int(os.environ.get("CHECK_INTERVAL", "4"))
@@ -114,13 +116,15 @@ async def check_usdt_transactions(context: ContextTypes.DEFAULT_TYPE):
                     amount = raw_value / (10 ** decimals)
                     from_address = tx.get("from")
                     
-                    # 后台自动精确判定发送到哪个群，但群消息里不再显示多余标签
+                    # 🌟 精准判定分流：这里帮新加入的群D做自动定位
                     if from_address in GROUP_A_SENDERS:
                         target_groups = [GROUP_A_ID]
                     elif from_address in GROUP_B_SENDERS:
                         target_groups = [GROUP_B_ID]
                     elif from_address in GROUP_C_SENDERS:
                         target_groups = [GROUP_C_ID]
+                    elif from_address in GROUP_D_SENDERS: # 🌟 新增：如果付款地址在D列表里
+                        target_groups = [GROUP_D_ID]      # 🌟 新增：那就投递给群D
                     else:
                         continue
                     
@@ -232,7 +236,6 @@ async def cx_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         await update.message.reply_text(f"❌ 获取失败: {e}")
 
-# ================= ⚡ 核心改良：万能文本智能分流处理器 =================
 async def universal_message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         chat = update.effective_chat
@@ -241,15 +244,12 @@ async def universal_message_handler(update: Update, context: ContextTypes.DEFAUL
         if not chat or not message or not message.text:
             return
             
-        # 核心清空：直接去掉前后空格，通通变小写，彻底杜绝输入法空格干扰
         user_text = message.text.strip().lower()
         
-        # 分流一：如果是纯 cx 文字（允许前后带空格，已被 strip 清理干净）
         if user_text == "cx":
             await cx_command(update, context)
             return
             
-        # 分流二：如果是查询群 ID 指令
         if "查群id" in user_text or "群id" in user_text:
             if chat.type in ["group", "supergroup"]:
                 group_id = chat.id
@@ -270,14 +270,8 @@ async def universal_message_handler(update: Update, context: ContextTypes.DEFAUL
 
 def main():
     application = Application.builder().token(TG_BOT_TOKEN).build()
-    
-    # 1. 保留标准斜杠命令 /cx 的响应
     application.add_handler(CommandHandler("cx", cx_command))
-    
-    # 2. 🌟 核心改良：将所有群组内的普通文本，统一交给我们的“智能分流处理器”
-    # 这样无论是打 cx、cx(带空格)、群ID、查群ID，全部在一个地方安全有序地排队处理！
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, universal_message_handler))
-    
     application.job_queue.run_repeating(check_usdt_transactions, interval=CHECK_INTERVAL, first=1)
     application.run_polling()
 
