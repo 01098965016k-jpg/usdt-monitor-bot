@@ -20,15 +20,21 @@ def base58_to_hex(addr: str) -> str:
 TG_BOT_TOKEN = os.environ["TG_BOT_TOKEN"]
 MONITORED_ADDRESS = os.environ["MONITORED_ADDRESS"]
 
+# 读取各大群组的 ID
 GROUP_A_ID = int(os.environ["GROUP_A_ID"])
 GROUP_B_ID = int(os.environ["GROUP_B_ID"])
 GROUP_C_ID = int(os.environ["GROUP_C_ID"])
-GROUP_D_ID = int(os.environ["GROUP_D_ID"]) # 🌟 新增：读取群D的ID
+GROUP_D_ID = int(os.environ["GROUP_D_ID"])
+GROUP_E_ID = int(os.environ["GROUP_E_ID"]) # 🌟 新增：群E ID
+GROUP_F_ID = int(os.environ["GROUP_F_ID"]) # 🌟 新增：群F ID
 
+# 读取各大群组对应的付款地址列表
 GROUP_A_SENDERS = os.environ["GROUP_A_SENDERS"].split(",")
 GROUP_B_SENDERS = os.environ["GROUP_B_SENDERS"].split(",")
 GROUP_C_SENDERS = os.environ["GROUP_C_SENDERS"].split(",")
-GROUP_D_SENDERS = os.environ["GROUP_D_SENDERS"].split(",") # 🌟 新增：读取群D的付款地址列表
+GROUP_D_SENDERS = os.environ["GROUP_D_SENDERS"].split(",")
+GROUP_E_SENDERS = os.environ["GROUP_E_SENDERS"].split(",") # 🌟 新增：群E地址
+GROUP_F_SENDERS = os.environ["GROUP_F_SENDERS"].split(",") # 🌟 新增：群F地址
 
 USDT_CONTRACT = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t"
 CHECK_INTERVAL = int(os.environ.get("CHECK_INTERVAL", "4"))
@@ -116,15 +122,19 @@ async def check_usdt_transactions(context: ContextTypes.DEFAULT_TYPE):
                     amount = raw_value / (10 ** decimals)
                     from_address = tx.get("from")
                     
-                    # 🌟 精准判定分流：这里帮新加入的群D做自动定位
+                    # 🌟 核心分流升级：精准匹配 A、B、C、D、E、F 对应的群
                     if from_address in GROUP_A_SENDERS:
                         target_groups = [GROUP_A_ID]
                     elif from_address in GROUP_B_SENDERS:
                         target_groups = [GROUP_B_ID]
                     elif from_address in GROUP_C_SENDERS:
                         target_groups = [GROUP_C_ID]
-                    elif from_address in GROUP_D_SENDERS: # 🌟 新增：如果付款地址在D列表里
-                        target_groups = [GROUP_D_ID]      # 🌟 新增：那就投递给群D
+                    elif from_address in GROUP_D_SENDERS:
+                        target_groups = [GROUP_D_ID]
+                    elif from_address in GROUP_E_SENDERS: # 🌟 新增群E分流
+                        target_groups = [GROUP_E_ID]
+                    elif from_address in GROUP_F_SENDERS: # 🌟 新增群F分流
+                        target_groups = [GROUP_F_ID]
                     else:
                         continue
                     
