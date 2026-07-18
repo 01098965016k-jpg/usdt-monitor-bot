@@ -232,10 +232,43 @@ async def cx_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         await update.message.reply_text(f"❌ 获取失败: {e}")
 
+# ================= 新增功能：查群ID逻辑 =================
+async def get_group_id_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        chat = update.effective_chat
+        message = update.effective_message
+        
+        if not chat or not message or not message.text:
+            return
+            
+        user_text = message.text.strip().lower()
+        
+        # 严格且松散的触发词过滤（剔除了对 cx 的任何干扰）
+        if "查群id" in user_text or "群id" in user_text:
+            if chat.type in ["group", "supergroup"]:
+                group_id = chat.id
+                group_name = chat.title
+                
+                reply_text = (
+                    f"📋 <b>群组信息查询成功</b>:\n\n"
+                    f"👤 <b>群名称:</b> {group_name}\n"
+                    f"🆔 <b>群组 ID:</b> <code>{group_id}</code>\n\n"
+                    f"<i>(提示：点击上方ID数字可自动复制)</i>"
+                )
+                await message.reply_text(reply_text, parse_mode="HTML")
+            else:
+                await message.reply_text("❌ 请在需要查询的群组中发送该指令。")
+    except Exception as e:
+        print(f"查询群ID处理异常: {e}")
+
 def main():
     application = Application.builder().token(TG_BOT_TOKEN).build()
     application.add_handler(CommandHandler("cx", cx_command))
     application.add_handler(MessageHandler(filters.Regex(r'^[cC][xX]$'), cx_command))
+    
+    # 🌟 新增：把查群ID功能塞进处理器，完全使用你的原生架构运行
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, get_group_id_handler))
+    
     application.job_queue.run_repeating(check_usdt_transactions, interval=CHECK_INTERVAL, first=1)
     application.run_polling()
 
