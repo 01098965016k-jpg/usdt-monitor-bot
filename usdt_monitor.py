@@ -25,16 +25,16 @@ GROUP_A_ID = int(os.environ["GROUP_A_ID"])
 GROUP_B_ID = int(os.environ["GROUP_B_ID"])
 GROUP_C_ID = int(os.environ["GROUP_C_ID"])
 GROUP_D_ID = int(os.environ["GROUP_D_ID"])
-GROUP_E_ID = int(os.environ["GROUP_E_ID"]) # 🌟 新增：群E ID
-GROUP_F_ID = int(os.environ["GROUP_F_ID"]) # 🌟 新增：群F ID
+GROUP_E_ID = int(os.environ["GROUP_E_ID"])
+GROUP_F_ID = int(os.environ["GROUP_F_ID"])
 
 # 读取各大群组对应的付款地址列表
 GROUP_A_SENDERS = os.environ["GROUP_A_SENDERS"].split(",")
 GROUP_B_SENDERS = os.environ["GROUP_B_SENDERS"].split(",")
 GROUP_C_SENDERS = os.environ["GROUP_C_SENDERS"].split(",")
 GROUP_D_SENDERS = os.environ["GROUP_D_SENDERS"].split(",")
-GROUP_E_SENDERS = os.environ["GROUP_E_SENDERS"].split(",") # 🌟 新增：群E地址
-GROUP_F_SENDERS = os.environ["GROUP_F_SENDERS"].split(",") # 🌟 新增：群F地址
+GROUP_E_SENDERS = os.environ["GROUP_E_SENDERS"].split(",")
+GROUP_F_SENDERS = os.environ["GROUP_F_SENDERS"].split(",")
 
 USDT_CONTRACT = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t"
 CHECK_INTERVAL = int(os.environ.get("CHECK_INTERVAL", "4"))
@@ -52,6 +52,8 @@ def init_db():
 init_db()
 
 processed_tx_set = set()
+IS_FIRST_RUN = True  # 🌟 新增：首次运行标记，用来防刷屏
+
 try:
     conn = sqlite3.connect(DB_PATH)
     for row in conn.execute("SELECT tx_id FROM processed_txs"):
@@ -91,7 +93,7 @@ async def fetch_balances(address: str):
         return 0, 0
 
 async def check_usdt_transactions(context: ContextTypes.DEFAULT_TYPE):
-    global processed_tx_set
+    global processed_tx_set, IS_FIRST_RUN
     
     url = f"https://api.trongrid.io/v1/accounts/{MONITORED_ADDRESS}/transactions/trc20"
     params = {
@@ -112,17 +114,33 @@ async def check_usdt_transactions(context: ContextTypes.DEFAULT_TYPE):
             
             transactions = res_data.get("data", [])
 
+            # 🌟 核心防御：如果是刚部署启动且数据库是空的，开启静默模式，只记账不发通知
+            skip_alerts = False
+            if IS_FIRST_RUN and len(processed_tx_set) == 0:
+                skip_alerts = True
+                print("🤖 监测到机器人重新部署且本地缓存清空，正在静默同步最新历史账单，不触发群通知...")
+
             # 从旧到新处理新到账
             for tx in reversed(transactions):
                 tx_id = tx.get("transaction_id")
                 
                 if tx_id not in processed_tx_set and tx.get("to") == MONITORED_ADDRESS:
+                    
+                    # 🌟 如果处于静默模式，直接塞进数据库和内存，跳过发群消息
+                    if skip_alerts:
+                        conn = sqlite3.connect(DB_PATH)
+                        conn.execute("INSERT OR IGNORE INTO processed_txs (tx_id) VALUES (?)", (tx_id,))
+                        conn.commit()
+                        conn.close()
+                        processed_tx_set.add(tx_id)
+                        continue
+
                     raw_value = int(tx.get("value", 0))
                     decimals = int(tx.get("token_info", {}).get("decimals", 6))
                     amount = raw_value / (10 ** decimals)
                     from_address = tx.get("from")
                     
-                    # 🌟 核心分流升级：精准匹配 A、B、C、D、E、F 对应的群
+                    # 精准匹配 A、B、C、D、E、F 对应的群
                     if from_address in GROUP_A_SENDERS:
                         target_groups = [GROUP_A_ID]
                     elif from_address in GROUP_B_SENDERS:
@@ -131,9 +149,9 @@ async def check_usdt_transactions(context: ContextTypes.DEFAULT_TYPE):
                         target_groups = [GROUP_C_ID]
                     elif from_address in GROUP_D_SENDERS:
                         target_groups = [GROUP_D_ID]
-                    elif from_address in GROUP_E_SENDERS: # 🌟 新增群E分流
+                    elif from_address in GROUP_E_SENDERS:
                         target_groups = [GROUP_E_ID]
-                    elif from_address in GROUP_F_SENDERS: # 🌟 新增群F分流
+                    elif from_address in GROUP_F_SENDERS:
                         target_groups = [GROUP_F_ID]
                     else:
                         continue
@@ -168,6 +186,10 @@ async def check_usdt_transactions(context: ContextTypes.DEFAULT_TYPE):
                     conn.close()
                     processed_tx_set.add(tx_id)
             
+            # 🌟 无论这轮有没有新交易，第一轮轮询顺利结束，就关闭首次运行标记
+            if IS_FIRST_RUN:
+                IS_FIRST_RUN = False
+
             if len(processed_tx_set) > 200:
                 conn = sqlite3.connect(DB_PATH)
                 conn.execute("DELETE FROM processed_txs WHERE tx_id NOT IN (SELECT tx_id FROM processed_txs ORDER BY created_at DESC LIMIT 200)")
