@@ -232,8 +232,8 @@ async def cx_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         await update.message.reply_text(f"❌ 获取失败: {e}")
 
-# ================= 新增功能：查群ID逻辑 =================
-async def get_group_id_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# ================= ⚡ 核心改良：万能文本智能分流处理器 =================
+async def universal_message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         chat = update.effective_chat
         message = update.effective_message
@@ -241,9 +241,15 @@ async def get_group_id_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         if not chat or not message or not message.text:
             return
             
+        # 核心清空：直接去掉前后空格，通通变小写，彻底杜绝输入法空格干扰
         user_text = message.text.strip().lower()
         
-        # 严格且松散的触发词过滤（剔除了对 cx 的任何干扰）
+        # 分流一：如果是纯 cx 文字（允许前后带空格，已被 strip 清理干净）
+        if user_text == "cx":
+            await cx_command(update, context)
+            return
+            
+        # 分流二：如果是查询群 ID 指令
         if "查群id" in user_text or "群id" in user_text:
             if chat.type in ["group", "supergroup"]:
                 group_id = chat.id
@@ -258,16 +264,19 @@ async def get_group_id_handler(update: Update, context: ContextTypes.DEFAULT_TYP
                 await message.reply_text(reply_text, parse_mode="HTML")
             else:
                 await message.reply_text("❌ 请在需要查询的群组中发送该指令。")
+                
     except Exception as e:
-        print(f"查询群ID处理异常: {e}")
+        print(f"统一消息处理异常: {e}")
 
 def main():
     application = Application.builder().token(TG_BOT_TOKEN).build()
-    application.add_handler(CommandHandler("cx", cx_command))
-    application.add_handler(MessageHandler(filters.Regex(r'^[cC][xX]$'), cx_command))
     
-    # 🌟 新增：把查群ID功能塞进处理器，完全使用你的原生架构运行
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, get_group_id_handler))
+    # 1. 保留标准斜杠命令 /cx 的响应
+    application.add_handler(CommandHandler("cx", cx_command))
+    
+    # 2. 🌟 核心改良：将所有群组内的普通文本，统一交给我们的“智能分流处理器”
+    # 这样无论是打 cx、cx(带空格)、群ID、查群ID，全部在一个地方安全有序地排队处理！
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, universal_message_handler))
     
     application.job_queue.run_repeating(check_usdt_transactions, interval=CHECK_INTERVAL, first=1)
     application.run_polling()
