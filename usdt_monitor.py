@@ -104,7 +104,7 @@ async def check_usdt_transactions(context: ContextTypes.DEFAULT_TYPE):
     
     try:
         async with httpx.AsyncClient(headers={"TRON-PRO-API-KEY": TRONGRID_API_KEY}) as client:
-            response = await client.get(url, params=params, timeout=3)
+            response = await client.get(url, params=params, timeout=8)
             if response.status_code != 200:
                 return
             
@@ -298,7 +298,7 @@ async def universal_message_handler(update: Update, context: ContextTypes.DEFAUL
                 await message.reply_text("❌ 请在需要查询的群组中发送该指令。")
                 
     except Exception as e:
-        print(f"统一消息处理异常: {e}")
+        print(f"统一消息处理异常: {repr(e)}")
 
 def main():
     application = Application.builder().token(TG_BOT_TOKEN).build()
